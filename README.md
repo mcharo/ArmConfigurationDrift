@@ -7,8 +7,13 @@ Note that due to differences in the data structures used by the two APIs, the to
 
 ## Usage
 1. Log into Azure using `Connect-AzAccount` and select your subscription with `Set-AzContext`
-1. Load the script:`. .\Show-AzConfigurationDrift.ps1`
-1. Run the `Show-AzConfigurationDrift` function, passing in the names of your template file, template parameter file and resource group:
-```powershell
-Show-AzConfigurationDrift -resourceGroupName "myresourcegroup" -templateFile .\templates\azuredeploy.json -templateParametersFile .\templates\web-azuredeploy.parameters.json
-```
+2. Run the `Show-AzConfigurationDrift.ps1` script, passing in the names of your template file, template parameter file and resource group:
+
+    ```powershell
+    ./Show-AzConfigurationDrift.ps1 -ResourceGroupName "rg-myresource-group" -TemplateFile ./templates/template.json -TemplateParametersFile ./templates/parameters.json
+    ```
+3. If you want to import the script's functions into another script, it also supports being dot-sourced:
+
+    ```powershell
+    . ./Show-AzConfigurationDrift.ps1
+    ```

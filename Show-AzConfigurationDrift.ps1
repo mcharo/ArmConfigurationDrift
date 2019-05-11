@@ -1,95 +1,107 @@
-﻿function ExpandTemplate
+﻿[CmdletBinding()]
+param (
+    [string]
+    $ResourceGroupName,
+
+    [string]
+    $TemplateFile,
+
+    [string]
+    $TemplateParametersFile
+)
+
+function ExpandTemplate
 {
 
     param (
-        $resourceGroupName,
-        $templateFile,
-        $templateParametersFile
+        $ResourceGroupName,
+        $TemplateFile,
+        $TemplateParametersFile
     )
 
-    $debugPreference = 'Continue'
-    $rawResponse = Test-AzResourceGroupDeployment -TemplateFile $templateFile -TemplateParameterFile $templateParametersFile -ResourceGroupName $resourceGroupName 5>&1
-    $debugPreference = 'SilentlyContinue'
-    $httpResponse = $rawResponse | Where { $_ -like "*HTTP RESPONSE*"} | ForEach-Object {$_ -Replace 'DEBUG: ', ''}
-    $armTemplateJson = '{' + $httpResponse.Split('{',2)[1]
-    $armTemplateObject = $armTemplateJson | ConvertFrom-Json
+    $DebugPreference = 'Continue'
+    $RawResponse = Test-AzResourceGroupDeployment -TemplateFile $TemplateFile -TemplateParameterFile $TemplateParametersFile -ResourceGroupName $ResourceGroupName 5>&1
+    $DebugPreference = 'SilentlyContinue'
+    $HttpResponse = $RawResponse | Where-Object { $_ -like "*HTTP RESPONSE*"} | ForEach-Object {$_ -Replace 'DEBUG: ', ''}
+    $ArmTemplateJson = '{' + $HttpResponse.Split('{',2)[1]
+    $ArmTemplateObject = $ArmTemplateJson | ConvertFrom-Json
 
 
     # Validated Resources in PowerShell object
-    $resources = @()
+    $Resources = @()
 
     # Fix names that don't match the RG ones
-    foreach ($res in $armTemplateObject.properties.validatedResources) 
+    foreach ($Resource in $ArmTemplateObject.properties.validatedResources) 
     {
-        $res | Add-Member -MemberType NoteProperty -Name "ResourceId" -Value $res.id
-        $res | Add-Member -MemberType NoteProperty -Name "ResourceType" -Value $res.type
-        $resources += $res
+        $Resource | Add-Member -MemberType NoteProperty -Name "ResourceId" -Value $Resource.id
+        $Resource | Add-Member -MemberType NoteProperty -Name "ResourceType" -Value $Resource.type
+        $Resources += $Resource
     }
 
-    return $resources
+    return $Resources
 
 }
 
 function GetResourcesInRG
 {
     param (
-        $resourceGroupName
+        $ResourceGroupName
     )
-    $debugPreference = 'SilentlyContinue'
-    $currentSubscriptionId = (Get-AzContext).Subscription.SubscriptionId
-    $resources = Get-AzResource -ResourceId "/subscriptions/$currentSubscriptionId/resourceGroups/$resourceGroupName/resources" -ExpandProperties
-    return $resources
+    $DebugPreference = 'SilentlyContinue'
+    $CurrentSubscriptionId = (Get-AzContext).Subscription.SubscriptionId
+    $Resources = Get-AzResource -ResourceId "/subscriptions/$CurrentSubscriptionId/resourceGroups/$ResourceGroupName/resources" -ExpandProperties
+    return $Resources
 
 }
 
 function MatchProperties
 {
     param (
-        $resourceId,
-        $templateResource,
-        $rgResource
+        $ResourceId,
+        $TemplateResource,
+        $RgResource
     )
 
-    $templateResourceProps = $templateResource | Get-Member -MemberType NoteProperty | Select -ExpandProperty Name
-    foreach ($propName in $templateResourceProps)
+    $TemplateResourceProps = $TemplateResource | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
+    foreach ($PropertyName in $TemplateResourceProps)
     {
-         $templateResourcePropValue = $templateResource."$propName"
-         $rgResourcePropValue = $rgResource."$propName"
-         if ($rgResourcePropValue -eq $null) 
+         $TemplateResourcePropValue = $TemplateResource."$PropertyName"
+         $RgResourcePropValue = $RgResource."$PropertyName"
+         if ($null -eq $RgResourcePropValue) 
          {
             # Skip if the props don't match, report on the non-obvious ones
-            if ($propName -ne "apiVersion" -and $propName -ne "id" -and $propName -ne "type" -and $propName -ne "dependsOn")
+            if ($PropertyName -ne "apiVersion" -and $PropertyName -ne "id" -and $PropertyName -ne "type" -and $PropertyName -ne "dependsOn")
             {
-                Write-Host "`tSkipping property '$propName' from template, as it could not be found on the deployed resource." -ForegroundColor Gray
+                Write-Host "`tSkipping property '$PropertyName' from template, as it could not be found on the deployed resource." -ForegroundColor Gray
             }
          } 
          else
          {
             # Property found on both sides, so compare values
-            if ($templateResourcePropValue.GetType().Name -eq "PSCustomObject")
+            if ($TemplateResourcePropValue.GetType().Name -eq "PSCustomObject")
             {
                 # Recurse to the next level
-                MatchProperties -resourceId $resourceId -templateResource $templateResourcePropValue  -rgResource $rgResourcePropValue
+                MatchProperties -ResourceId $ResourceId -TemplateResource $TemplateResourcePropValue  -RgResource $RgResourcePropValue
             }
-            elseif ($templateResourcePropValue.GetType().Name -eq "Object[]")
+            elseif ($TemplateResourcePropValue.GetType().Name -eq "Object[]")
             {
-                if ($templateResourcePropValue.Length -ne $rgResourcePropValue.Length)
+                if ($TemplateResourcePropValue.Length -ne $RgResourcePropValue.Length)
                 {
-                     Write-Host "`tMismatch in property '$propName'. Different number of elements in arrays." -ForegroundColor Yellow
+                     Write-Host "`tMismatch in property '$PropertyName'. Different number of elements in arrays." -ForegroundColor Yellow
                 }
                 else
                 {
-                    for ($i=0 ; $i -lt $templateResourcePropValue.Length; $i++)
+                    for ($i=0 ; $i -lt $TemplateResourcePropValue.Length; $i++)
                     {
-                        if ($templateResourcePropValue[$i].GetType().Name -eq "PSCustomObject")
+                        if ($TemplateResourcePropValue[$i].GetType().Name -eq "PSCustomObject")
                         {
-                            MatchProperties -resourceId $resourceId -templateResource $templateResourcePropValue[$i]  -rgResource $rgResourcePropValue[$i]
+                            MatchProperties -ResourceId $ResourceId -TemplateResource $TemplateResourcePropValue[$i]  -RgResource $RgResourcePropValue[$i]
                         }
                         else
                         {
-                            if ((CompareProps -propName $propName -propValue1 $templateResourcePropValue[$i] -propValue2 $rgResourcePropValue[$i]) -eq $false)
+                            if ((CompareProps -PropertyName $PropertyName -PropertyValue1 $TemplateResourcePropValue[$i] -PropertyValue2 $RgResourcePropValue[$i]) -eq $false)
                             {
-                                Write-Host "`tMismatch in property '$propName[$i]'. Value in template: '$($templateResourcePropValue[$i])', value in deployed resource: '$($rgResourcePropValue[$i])' " -ForegroundColor Yellow
+                                Write-Host "`tMismatch in property '$PropertyName[$i]'. Value in template: '$($TemplateResourcePropValue[$i])', value in deployed resource: '$($RgResourcePropValue[$i])' " -ForegroundColor Yellow
                             }
                         }
                     }
@@ -97,9 +109,9 @@ function MatchProperties
             }
             else
             {
-                if ( (CompareProps -propName $propName -propValue1 $templateResourcePropValue -propValue2 $rgResourcePropValue) -eq $false)
+                if ( (CompareProps -PropertyName $PropertyName -PropertyValue1 $TemplateResourcePropValue -PropertyValue2 $RgResourcePropValue) -eq $false)
                 {
-                    Write-Host "`tMismatch in property '$propName'. Value in template: '$templateResourcePropValue', value in deployed resource: '$rgResourcePropValue' " -ForegroundColor Yellow
+                    Write-Host "`tMismatch in property '$PropertyName'. Value in template: '$TemplateResourcePropValue', value in deployed resource: '$RgResourcePropValue' " -ForegroundColor Yellow
                 }
             }
          }
@@ -110,76 +122,95 @@ function MatchProperties
 function CompareResourceLists
 {
     param (
-        $templateResources,
-        $rgResources
+        $TemplateResources,
+        $RgResources
     )
 
     # Check for resources in template but not RG
-    foreach ($templateRes in $templateResources)
+    foreach ($TemplateRes in $TemplateResources)
     {
-        $rgRes = $rgResources | Where-Object { $_.ResourceId -eq $templateRes.ResourceId } 
-        if ($rgRes -eq $null)
+        $RgRes = $RgResources | Where-Object { $_.ResourceId -eq $TemplateRes.ResourceId } 
+        if ($null -eq $RgRes)
         {
-            Write-Host "Resource from template $($templateRes.ResourceId) not present in Resource Group" -ForegroundColor Magenta
+            Write-Host "Resource from template $($TemplateRes.ResourceId) not present in Resource Group" -ForegroundColor Magenta
         }
     }
 
     # Check for resources in resourceList2 but not resourceList1
-    foreach ($rgRes in $rgResources)
+    foreach ($RgRes in $RgResources)
     {
-        $templateRes = $templateResources | Where-Object { $_.ResourceId -eq $rgRes.ResourceId } 
-        if ($templateRes -eq $null)
+        $TemplateRes = $TemplateResources | Where-Object { $_.ResourceId -eq $RgRes.ResourceId } 
+        if ($null -eq $TemplateRes)
         {
-            Write-Host "Resource in RG $($rgRes.ResourceId) not present in template" -ForegroundColor Green
+            Write-Host "Resource in RG $($RgRes.ResourceId) not present in template" -ForegroundColor Green
         }
     }
 
     # Find resources that exist in both lists
-    foreach ($templateRes in $templateResources)
+    foreach ($TemplateRes in $TemplateResources)
     {
-        $rgRes = $rgResources | Where-Object { $_.ResourceId -eq $templateRes.ResourceId } 
-        if ($rgRes -ne $null)
+        $RgRes = $RgResources | Where-Object { $_.ResourceId -eq $TemplateRes.ResourceId } 
+        if ($null -ne $RgRes)
         {
-            Write-Host "Comparing properties in resource $($rgRes.ResourceId)"
-            MatchProperties -resourceId $templateRes.ResourceId -templateResource $templateRes -rgResource $rgRes
+            Write-Host "Comparing properties in resource $($RgRes.ResourceId)"
+            MatchProperties -ResourceId $TemplateRes.ResourceId -TemplateResource $TemplateRes -RgResource $RgRes
 
         }
     }
 }
 
-$locations = Get-AzLocation
+$Locations = Get-AzLocation
 
-function CompareProps($propName, $propValue1, $propValue2)
+function CompareProps
 {
-    if ($propName -eq "location")
+    [CmdletBinding()]
+    param(
+        [string]
+        $PropertyName,
+
+        [string]
+        $PropertyValue1,
+
+        [string]
+        $PropertyValue2
+    )
+    if ($PropertyName -eq "location")
     {
-        return CompareLocations -loc1 $propValue1 -loc2 $propValue2
+        return CompareLocations -Location1 $PropertyValue1 -Location2 $PropertyValue2
     }
     else
     {
-        return $propValue1 -eq $propValue2
+        return $PropertyValue1 -eq $PropertyValue2
     }
 }
 
-function CompareLocations($loc1, $loc2)
+function CompareLocations
 {
+    [CmdletBinding()]
+    param(
+        [string]
+        $Location1,
+
+        [string]
+        $Location2)
+
     # Check if 2 location strings refer to the same region, e.g. "Australia East" and "australiaeast"
-    if ($loc1 -eq $loc2)
+    if ($Location1 -eq $Location2)
     {
         return $true
     }
     else
     {
-        # See if $loc1 is Location and $loc2 is DisplayName
-        $loc = $locations | Where-Object { $_.Location -eq $loc1 -and $_.DisplayName -eq $loc2 }
-        if ($loc -ne $null)
+        # See if $Location1 is Location and $Location2 is DisplayName
+        $Location = $Locations | Where-Object { $_.Location -eq $Location1 -and $_.DisplayName -eq $Location2 }
+        if ($null -ne $Location)
         {
             return $true
         }
 
-        # See if $loc1 is DisplayName and $loc2 is Location
-        $loc = $locations | Where-Object { $_.DisplayName -eq $loc1 -and $_.Location -eq $loc2 }
-        if ($loc -ne $null)
+        # See if $Location1 is DisplayName and $Location2 is Location
+        $Location = $Locations | Where-Object { $_.DisplayName -eq $Location1 -and $_.Location -eq $Location2 }
+        if ($null -ne $Location)
         {
             return $true
         }
@@ -191,18 +222,25 @@ function CompareLocations($loc1, $loc2)
 
 function Show-AzConfigurationDrift
 {
+    [CmdletBinding()]
     param (
-        $resourceGroupName,
-        $templateFile,
-        $templateParametersFile
+        [string]
+        $ResourceGroupName,
+
+        [string]
+        $TemplateFile,
+
+        [string]
+        $TemplateParametersFile
     )
 
-    $templateResources = ExpandTemplate -resourceGroupName $resourceGroupName -templateFile $templateFile -templateParametersFile $templateParametersFile
-    $rgResources = GetResourcesInRG -resourceGroupName $resourceGroupName
-    CompareResourceLists -templateResources $templateResources -rgResources $rgResources
-
+    $TemplateResources = ExpandTemplate -ResourceGroupName $ResourceGroupName -TemplateFile $TemplateFile -TemplateParametersFile $TemplateParametersFile
+    $RgResources = GetResourcesInRG -ResourceGroupName $ResourceGroupName
+    CompareResourceLists -TemplateResources $TemplateResources -RgResources $RgResources
 }
 
-
-
-# Show-AzConfigurationDrift -resourceGroupName "YourRG" -templateFile .\templates\azuredeploy.json -templateParametersFile .\templates\azuredeploy.parameters.json
+$DotSourced = $MyInvocation.Line -match '^\.\s'
+if ($false -eq $DotSourced)
+{
+    Show-AzConfigurationDrift @PSBoundParameters
+}
