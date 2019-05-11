@@ -1,0 +1,63 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vnetName": {
+           "type": "string",
+           "metadata": {
+                "description": "Name of the virtual network"
+            }
+        },
+        "location": {
+           "type": "string",
+           "defaultValue": "[resourceGroup().location]",
+           "metadata": {
+                "description": "Location of resources"
+            }
+        },
+        "vnetAddressPrefix": {
+           "type": "string",
+           "defaultValue": "10.0.0.0/16",
+           "metadata": {
+                "description": "Address space of vnet"
+            }
+        },
+        "subnetAddressPrefix": {
+           "type": "string",
+           "defaultValue": "10.0.0.0/24",
+           "metadata": {
+                "description": "Address space of first subnet"
+            }
+        }
+    },
+    "variables": {
+        "subnetName": "[concat(parameters('vnetName'), '-subnet')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2018-08-01",
+            "name": "[parameters('vnetName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "displayName": "[parameters('vnetName')]"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[parameters('vnetAddressPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetName')]",
+                        "properties": {
+                            "addressPrefix": "[parameters('subnetAddressPrefix')]"
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {}
+}
