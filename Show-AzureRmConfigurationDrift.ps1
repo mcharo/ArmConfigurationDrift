@@ -8,7 +8,7 @@
     )
 
     $debugPreference = 'Continue'
-    $rawResponse = Test-AzureRmResourceGroupDeployment -TemplateFile $templateFile -TemplateParameterFile $templateParametersFile -ResourceGroupName $resourceGroupName 5>&1
+    $rawResponse = Test-AzResourceGroupDeployment -TemplateFile $templateFile -TemplateParameterFile $templateParametersFile -ResourceGroupName $resourceGroupName 5>&1
     $debugPreference = 'SilentlyContinue'
     $httpResponse = $rawResponse | Where { $_ -like "*HTTP RESPONSE*"} | ForEach-Object {$_ -Replace 'DEBUG: ', ''}
     $armTemplateJson = '{' + $httpResponse.Split('{',2)[1]
@@ -36,8 +36,8 @@ function GetResourcesInRG
         $resourceGroupName
     )
     $debugPreference = 'SilentlyContinue'
-    $currentSubscriptionId = (Get-AzureRmContext).Subscription.SubscriptionId
-    $resources = Get-AzureRmResource -ResourceId "/subscriptions/$currentSubscriptionId/resourceGroups/$resourceGroupName/resources" -ExpandProperties
+    $currentSubscriptionId = (Get-AzContext).Subscription.SubscriptionId
+    $resources = Get-AzResource -ResourceId "/subscriptions/$currentSubscriptionId/resourceGroups/$resourceGroupName/resources" -ExpandProperties
     return $resources
 
 }
@@ -147,7 +147,7 @@ function CompareResourceLists
     }
 }
 
-$locations = Get-AzureRmLocation
+$locations = Get-AzLocation
 
 function CompareProps($propName, $propValue1, $propValue2)
 {
@@ -189,7 +189,7 @@ function CompareLocations($loc1, $loc2)
 }
 
 
-function Show-AzureRmConfigurationDrift
+function Show-AzConfigurationDrift
 {
     param (
         $resourceGroupName,
@@ -205,4 +205,4 @@ function Show-AzureRmConfigurationDrift
 
 
 
-# Show-AzureRmConfigurationDrift -resourceGroupName "YourRG" -templateFile .\templates\azuredeploy.json -templateParametersFile .\templates\azuredeploy.parameters.json
+# Show-AzConfigurationDrift -resourceGroupName "YourRG" -templateFile .\templates\azuredeploy.json -templateParametersFile .\templates\azuredeploy.parameters.json
