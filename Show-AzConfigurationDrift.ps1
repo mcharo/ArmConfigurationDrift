@@ -12,10 +12,15 @@ param (
 
 function ExpandTemplate
 {
-
+    [CmdletBinding()]
     param (
+        [string]
         $ResourceGroupName,
+
+        [string]
         $TemplateFile,
+
+        [string]
         $TemplateParametersFile
     )
 
@@ -44,7 +49,9 @@ function ExpandTemplate
 
 function GetResourcesInRG
 {
+    [CmdletBinding()]
     param (
+        [string]
         $ResourceGroupName
     )
     $DebugPreference = 'SilentlyContinue'
@@ -56,9 +63,13 @@ function GetResourcesInRG
 
 function MatchProperties
 {
+    [CmdletBinding()]
     param (
+        [string]
         $ResourceId,
+
         $TemplateResource,
+
         $RgResource
     )
 
@@ -121,8 +132,10 @@ function MatchProperties
 
 function CompareResourceLists
 {
+    [CmdletBinding()]
     param (
         $TemplateResources,
+
         $RgResources
     )
 
