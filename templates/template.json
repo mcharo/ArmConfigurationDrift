@@ -57,6 +57,19 @@
                     }
                 ]
             }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2018-07-01",
+            "name": "sawlekjrwke",
+            "location": "westus",
+            "tags": {
+                "displayName": "sawlekjrwke"
+            },
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2"
         }
     ],
     "outputs": {}
