@@ -97,47 +97,6 @@ function GetResourcesInRG
     $Resources = Get-AzResource -ResourceId "/subscriptions/$CurrentSubscriptionId/resourceGroups/$ResourceGroupName/resources" -ExpandProperties
     $Resources = $Resources | ConvertTo-Hashtable
     return $Resources
-    $DetailedResources = @()
-    foreach ($Resource in $Resources)
-    {
-        if ($ResourceTypeCommandMapping.Contains($Resource.Type))
-        {
-            try
-            {
-                $Command = $ResourceTypeCommandMapping[$Resource.Type]
-                if (Test-CommandMinimumParameters -Command $Command -Parameters Name, ResourceGroupName)
-                {
-                    Write-Verbose "Running $($Command.Name)"
-                    $DetailedResource = & $Command -ResourceGroupName $Resource.ResourceGroupName -Name $Resource.Name
-                    if ($DetailedResource.Type)
-                    {
-                        Write-Verbose "Adding ResourceType property"
-                        $DetailedResource | Add-Member -MemberType NoteProperty -Name ResourceType -Value $DetailedResource.Type
-                    }
-                    if ($DetailedResource.Tag)
-                    {
-                        Write-Verbose "Adding Tags property"
-                        $DetailedResource | Add-Member -MemberType NoteProperty -Name Tags -Value $DetailedResource.Tag
-                    }
-                    $DetailedResources += $DetailedResource
-                }
-                else
-                {
-                    $DetailedResources += $Resource
-                }
-            }
-            catch
-            {
-                Write-Verbose "Error attempting to retrieve detailed object: $_"
-                $DetailedResources += $Resource
-            }
-        }
-        else
-        {
-            $DetailedResources += $Resource
-        }
-    }
-    return $DetailedResources
 }
 
 function FlattenProperty
@@ -153,14 +112,7 @@ function FlattenProperty
 
     if ($Property -is [array])
     {
-        if ($Property.Count -eq 0)
-        {
-            <#@{
-                Prefix = $Prefix
-                Property = @()
-            }#>
-        }
-        else
+        if ($Property.Count -gt 0)
         {
             $Count = 0
             Write-Verbose "Processing array value"
@@ -171,14 +123,6 @@ function FlattenProperty
             }
         }
     }
-    <#elseif ($Property -is [hashtable])
-    {
-        Write-Verbose "Processing hashtable value"
-        foreach ($Key in $Property.Keys)
-        {
-            FlattenProperty -Prefix "$Prefix.$Key" -Property $Property[$Key]
-        }
-    }#>
     elseif ($Property -and $Property.GetType().ImplementedInterfaces -contains [System.Collections.IDictionary])
     {
         Write-Verbose "Processing a dictionary value"

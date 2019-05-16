@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [switch]$IncludeTemplateMissing
 )
 
 Import-Module ./DriftFunctions.psm1 -Force
@@ -11,12 +10,12 @@ foreach ($Resource in $ExpandedTemplate.properties.validatedResources)
 {
     foreach ($PropertyName in $Resource.Keys)
     {
-        $TemplateKvPair = FlattenProperty -Prefix "$($Resource.Name).$($PropertyName)" -Property $Resource[$PropertyName]
+        $TemplateKvPair = FlattenProperty -Prefix "$($Resource.Name):$($PropertyName)" -Property $Resource[$PropertyName]
         if ($TemplateKvPair -is [array])
         {
             foreach ($KvPair in $TemplateKvPair)
             {
-                $KvPair.Prefix = $KvPair.Prefix -replace "^$([regex]::Escape($Resource.Name))\.Properties", "$($Resource.Name)"
+                $KvPair.Prefix = $KvPair.Prefix -replace "^$([regex]::Escape($Resource.Name))\:Properties\.", "$($Resource.Name):"
                 $Template[$KvPair.Prefix] = $KvPair.Property
             }
         }
@@ -33,18 +32,18 @@ foreach ($Resource in $ResourceGroupResources)
 {
     foreach ($PropertyName in $Resource.Keys)
     {
-        $AzureKvPair = FlattenProperty -Prefix "$($Resource.Name).$($PropertyName)" -Property $Resource[$PropertyName]
+        $AzureKvPair = FlattenProperty -Prefix "$($Resource.Name):$($PropertyName)" -Property $Resource[$PropertyName]
         if ($AzureKvPair -is [array])
         {
             foreach ($KvPair in $AzureKvPair)
             {
-                $KvPair.Prefix = $KvPair.Prefix -replace "^$([regex]::Escape($Resource.Name))\.Properties", "$($Resource.Name)"
+                $KvPair.Prefix = $KvPair.Prefix -replace "^$([regex]::Escape($Resource.Name))\:Properties\.", "$($Resource.Name):"
                 $Azure[$KvPair.Prefix] = $KvPair.Property
             }
         }
         elseif ($null -ne $AzureKvPair.Prefix)
         {
-            $AzureKvPair.Prefix = $AzureKvPair.Prefix -replace "^$([regex]::Escape($Resource.Name))\.Properties", "$($Resource.Name)"
+            $AzureKvPair.Prefix = $AzureKvPair.Prefix -replace "^$([regex]::Escape($Resource.Name))\:Properties", "$($Resource.Name)"
             $Azure[$AzureKvPair.Prefix] = $AzureKvPair.Property
         }
     }
@@ -76,14 +75,18 @@ foreach ($Key in $Template.Keys)
     }
 }
 
-if ($IncludeTemplateMissing)
+$TemplateMissing = @()
+foreach ($Key in $Azure.Keys)
 {
-    $TemplateMissing = @()
-    foreach ($Key in $Azure.Keys)
+    if (-Not $Template.Contains($Key))
     {
-        if (-Not $Template.Contains($Key))
+        $ResourceName = if ($Key -match '^(?<ResourceName>.*?)\:') { $Matches['ResourceName'] }
+        if ($ResourceName -and $Template.Keys -match "^$([regex]::Escape($ResourceName))\:")
         {
-            if ($Template.Keys -match )
+
+        }
+        else
+        {
             $TemplateMissing += @{
                 $Key = @{
                     Deployed = $Azure[$Key]
@@ -96,6 +99,7 @@ if ($IncludeTemplateMissing)
 $Result = @{
     AzureDifferent = $AzureDifferent
     AzureMissing = $AzureMissing
+    TemplateMissing = $TemplateMissing
 }
 
 foreach ($Item in $Result.AzureDifferent)
@@ -109,19 +113,22 @@ foreach ($Item in $Result.AzureMissing)
     Write-Host "-$($Item.Keys)" -ForegroundColor Red
     Write-Host "`tTemplate: $($Item[$Item.Keys].Template)"
 }
-if ($IncludeTemplateMissing)
+foreach ($Item in $Result.TemplateMissing)
 {
-    $Result['TemplateMissing'] = $TemplateMissing
-    foreach ($Item in $Result.TemplateMissing)
+    $NewResourcePrefix = $Item.Keys.Split(':')[0]
+    if ($NewResourcePrefix -ne $ResourcePrefix)
     {
-        if ($Item[$Item.Keys].Deployed)
+        $ResourcePrefix = $NewResourcePrefix
+        Write-Host "+$($ResourcePrefix)" -ForegroundColor Green
+    }
+    if ($Item[$Item.Keys].Deployed)
+    {
+        if ($Item.Keys -match 'etag|provisioningState')
+        {}
+        else
         {
-            Write-Host "+$($Item.Keys)" -ForegroundColor Green
-            Write-Host "`Deployed: $($Item[$Item.Keys].Deployed)"
+            Write-Host "`t$($Item.Keys -replace "$([regex]::Escape($ResourcePrefix))\:"): $($Item[$Item.Keys].Deployed)"
         }
     }
 }
-#Write-Host "Deployed value missing from template:" -ForegroundColor DarkCyan
-#Write-Host "`tDeployed:"
-#Write-Host "`t`t$Key = $($Azure[$Key])"
-$Result
+#$Result
